@@ -26,6 +26,14 @@ import tot_profit_loss
 import var_func
 import update_version
 
+
+
+def suppress_qt_warnings():
+	environ["QT_DEVICE_PIXEL_RATIO"] = "0"
+	environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
+	environ["QT_SCREEN_SCALE_FACTORS"] = "1"
+	environ["QT_SCALE_FACTOR"] = "1"
+
 form_class = uic.loadUiType("mainwindow.ui")[0]
 
 
@@ -60,39 +68,35 @@ class MyWindow(QMainWindow, form_class):
 
     def go_branch_code(self):
         permission = self.permission
-        if permission == 'admin' or permission == 'manager':
+        if permission == 'admin' or permission == 'manager' or permission == 'crew':
             pop = brach_Codemng(self)
             pop.begin(permission)
             pop.exec_()
-        else:
-            QMessageBox.about(self,"알림","사용제한")
+
 
     def go_account_code(self):
         permission = self.permission
-        if permission == 'admin' or permission == 'manager':
+        if permission == 'admin' or permission == 'manager' or permission == 'crew':
             pop = Account_codemng(self)
             pop.begin(permission,0)
             pop.exec_()
-        else:
-            QMessageBox.about(self,"알림","사용제한")
+
 
     def go_spendcond_code(self):
         permission = self.permission
-        if permission == 'admin' or permission == 'manager':
+        if permission == 'admin' or permission == 'manager' or permission == 'crew':
             pop = spend_cond_Mng(self)
             pop.begin(permission,"spend")
             pop.exec_()
-        else:
-            QMessageBox.about(self,"알림","사용제한")
+
 
     def go_crew_master(self):
         permission = self.permission
-        if permission == 'admin' or permission == 'manager':
+        if permission == 'admin' or permission == 'manager' or permission == 'crew':
             pop = crew_Mastermng(self)
             pop.begin(permission)
             pop.exec_()
-        else:
-            QMessageBox.about(self,"알림","사용제한")
+
 
     def go_spend_code(self):
         permission = self.permission
@@ -179,6 +183,12 @@ class login(QDialog):
         if res:
             if res[2] == 'admin':
                 self.permission = 'admin'
+                self.close()
+            elif res[2] == 'manager':
+                self.permission = 'manager'
+                self.close()
+            elif res[2] == 'crew':
+                self.permission = 'crew'
                 self.close()
             else:
                 self.permission = res[2]
@@ -679,6 +689,7 @@ class crew_Mastermng(QDialog):
         self.tableWidget_attachment.setColumnWidth(0, 100)
         self.tableWidget_attachment.setColumnWidth(1, 300)
         self.tableWidget_attachment.setColumnWidth(2, 100)
+        self.att_res = False
 
     def get_branchnames(self):
         conn = connectDb.connect_Db()
@@ -688,6 +699,7 @@ class crew_Mastermng(QDialog):
         res = curs.fetchall()
         temp = []
         branches = []
+        self.branch_name.addItem('지점선택')
         for i in range(len(res)):
             if res[i][0] not in temp:
                 self.branch_name.addItem(res[i][0])
@@ -765,6 +777,8 @@ class crew_Mastermng(QDialog):
             add_sql = """ where crew_name like '{}'""".format('%%' + crewname + '%%')
         else:
             add_sql = """ where branch_name = '{}' and crew_name like '{}'""".format(branch,'%%' + crewname + '%%')
+            if crewname == '':
+                add_sql = """ where branch_name = '{}'""".format(branch)
         sql = self.sqls(add_sql)
         res = self.get_sqlresult(sql)
         self.display_crews(res)
@@ -783,9 +797,13 @@ class crew_Mastermng(QDialog):
                     getattr(self,cols[i]).setCurrentText(res[row][i])
                 elif cols[i] == 'inprocess':
                     tdate = res[row][3]
+                    if tdate == '':
+                        continue
                     self.inprocess.setDate(QDate(int(tdate[:4]), int(tdate[4:6]), int(tdate[6:])))
                 elif cols[i] == 'outprocess':
                     tdate = res[row][12]
+                    if tdate == '':
+                        continue
                     self.outprocess.setDate(QDate(int(tdate[:4]), int(tdate[4:6]), int(tdate[6:])))
                 else:
                     getattr(self,cols[i]).setText(res[row][i])
@@ -833,48 +851,54 @@ class crew_Mastermng(QDialog):
     def add_save(self):
         cols = self.crew_cols
         permission = self.permission
-        if permission == 'admin':
+        if permission == 'admin' or 'manager':
             if self.edit:
+                branch_name = self.branch_name.currentText()
+                if branch_name == '지점선택':
+                    QMessageBox.about(self, "알림", "지점선택이 되어 있지 않습니다. ")
                 save_confirm = self.save_confirmdata()
-                if save_confirm:
+                if not save_confirm:
+                    QMessageBox.about(self, "확인", "신규 직원 저장시 신분증,사업자등록증, 통장사본중 하나는 꼭 첨부되어야 합니다.")
                     datas = []
-                    for i in range(len(cols)):
-                        if cols[i] == 'service_gbn':
-                            idx = getattr(self,cols[i]).currentIndex()
-                            item = str(idx)
-                        elif cols[i] == 'service' or cols[i] == 'branch_name':
-                            item = getattr(self,cols[i]).currentText()
-                        elif cols[i] == 'remark':
-                            item = getattr(self,cols[i]).toPlainText()
-                        elif cols[i] == 'branch_code' :
-                            item = getattr(self,cols[i]).text()
-                        elif cols[i] == 'inprocess':
-                            tdate1 = self.inprocess.date()
-                            item = tdate1.toString('yyyyMMdd')
-                        elif cols[i] == 'outprocess':
-                            if self.service.currentText() == 'N':
-                                continue
+                for i in range(len(cols)):
+                    if cols[i] == 'service_gbn':
+                        idx = getattr(self,cols[i]).currentIndex()
+                        item = str(idx)
+                    elif cols[i] == 'service' or cols[i] == 'branch_name':
+                        item = getattr(self,cols[i]).currentText()
+                    elif cols[i] == 'remark':
+                        item = getattr(self,cols[i]).toPlainText()
+                    elif cols[i] == 'branch_code' :
+                        item = getattr(self,cols[i]).text()
+                    elif cols[i] == 'inprocess':
+                        tdate1 = self.inprocess.date()
+                        item = tdate1.toString('yyyyMMdd')
+                    elif cols[i] == 'outprocess':
+                        if self.service.currentText() == 'N':
+                            item = ''
+                        else:
                             tdate1 = self.outprocess.date()
                             item = tdate1.toString('yyyyMMdd')
-                        elif cols[i] == 'service_period':
-                            if self.service.currentText() == 'Y':
-                                item = getattr(self, cols[i]).text()
-                            else:
-                                item = ''
+                    elif cols[i] == 'service_period':
+                        if self.service.currentText() == 'Y':
+                            item = getattr(self, cols[i]).text()
                         else:
-                            item = getattr(self,cols[i]).text()
-                        getattr(self,cols[i]).setEnabled(False)
-                        self.edit = False
-                        datas.append(item)
-                    self.save_data(datas)
-                    self.save_info_attachment()
-                    self.make_payee(datas)
-                    self.pushButton_4.setEnabled(False)
-                    self.pushButton_5.setEnabled(False)
-                    self.tableWidget_attachment.setEnabled(True)
-                    self.begin(self.permission)
-                else:
-                    QMessageBox.about(self, "확인","신규 직원 저장시 신분증,사업자등록증, 통장사본중 하나는 꼭 첨부되어야 합니다.")
+                            item = ''
+                    else:
+                        item = getattr(self,cols[i]).text()
+                    getattr(self,cols[i]).setEnabled(False)
+                    self.edit = False
+                    datas.append(item)
+                self.save_data(datas)
+                self.save_info_attachment()
+                self.make_payee(datas)
+                self.pushButton_4.setEnabled(False)
+                self.pushButton_5.setEnabled(False)
+                self.tableWidget_attachment.setEnabled(True)
+                self.get_search()
+                #else:
+                    #pass
+                    #QMessageBox.about(self, "확인","신규 직원 저장시 신분증,사업자등록증, 통장사본중 하나는 꼭 첨부되어야 합니다.")
             else:
                 self.edit = True
                 ncode = self.make_crewcode()
@@ -899,6 +923,9 @@ class crew_Mastermng(QDialog):
                     if cols[i] not in ['outprocess','inprocess','crew_code','service','service_gbn','branch_name']:
                         getattr(self,cols[i]).setText('')
 
+#['branch_name', 'crew_name', 'crew_contact', 'inprocess', 'service_period', 'service_gbn',
+ #                         'account_no', 'account_bank', 'payday', 'service', 'crew_address', 'remark', 'outprocess',
+ #                         'branch_code','crew_code','mails','bank_code']
 
     def save_data(self,datas):
 
@@ -927,6 +954,8 @@ class crew_Mastermng(QDialog):
             account_code = 'CH3002'
             account_name = '계약직급여'
             porder_name = '계약직급여'
+        #if datas[9] != 'Y':
+            #self.update_payee_noworking(crew_code)
         pcode = '20'
         pname = '인터넷뱅킹'
 
@@ -943,6 +972,9 @@ class crew_Mastermng(QDialog):
         conn.commit()
         conn.close()
 
+    #def update_payee_noworking(self,crew_code):
+    #    sql = """update payee set confirm = 'N' where gcode = '{}'""".format(crew_code)
+    #    var_func.execute_sql_insdelupd(sql)
 
     def save_confirmdata(self):
         count_attachment = self.tableWidget_attachment.rowCount()
@@ -959,16 +991,18 @@ class crew_Mastermng(QDialog):
 
     def save_info_attachment(self):
         att_res = self.att_res
-        tbl = self.tableWidget_attachment
-        rows = tbl.rowCount()
-        for row in range(rows):
-            tag = tbl.cellWidget(row,2).currentText()
-            sql = """update attachment set tag = '{}' where seq = '{}'""".format(tag,att_res[row][3])
-            conn = connectDb.connect_Db()
-            curs = conn.cursor()
-            curs.execute(sql)
-        conn.commit()
-        conn.close()
+        if att_res:
+            tbl = self.tableWidget_attachment
+            rows = tbl.rowCount()
+            if rows > 0:
+                for row in range(rows):
+                    tag = tbl.cellWidget(row,2).currentText()
+                    sql = """update attachment set tag = '{}' where seq = '{}'""".format(tag,att_res[row][3])
+                    conn = connectDb.connect_Db()
+                    curs = conn.cursor()
+                    curs.execute(sql)
+                conn.commit()
+                conn.close()
 
 ##### 지급처 MAster 자동 생성
     def make_payee(self,datas):
@@ -981,8 +1015,9 @@ class crew_Mastermng(QDialog):
         account_bank = str(datas[7])
         branch_code = str(datas[13])
         branch_name = str(datas[0])
+        service = datas[9]
 
-        if datas[5] == 0:
+        if datas[5] == '1':
             account_code = 'CH3002'
             account_name = '계약직급여'
             payment_order_name = '계약직급여'
@@ -993,7 +1028,10 @@ class crew_Mastermng(QDialog):
 
         payment_order_code = '15'
         payment_name = '인터넷뱅킹'
-        confirm = 'Y'
+        if service == 'Y':
+            confirm = 'Y'
+        else:
+            confirm = 'N'
         remark = ''
         pay = ''
         payment_code = '20'
@@ -1002,7 +1040,7 @@ class crew_Mastermng(QDialog):
                  payment_order_code, payment_order_name, payment_name, confirm, remark, pay, mngcode,
                  payment_code, bank_code]
 
-        self.save_payee_datas_sql(datas,mngcode)
+        self.save_payee_datas_sql(datas,gcode)
 
     def payee_get_mngno(self):
         sql = """select max(mngcode) from payee"""
@@ -1014,12 +1052,12 @@ class crew_Mastermng(QDialog):
         no = str(no).zfill(6)
         return no
 
-    def save_payee_datas_sql(self,datas,mngno):
+    def save_payee_datas_sql(self,datas,gcode):
         payee_cols = ['gcode', 'gname', 'account_no', 'account_bank', 'branch_code', 'branch_name',
                              'account_code', 'account_name', 'payment_order_code', 'payment_order_name', 'payment_name',
                              'confirm', 'remark', 'pay', 'mngcode', 'payment_code', 'bank_code']
         tstring = ','.join(payee_cols)
-        sql1 = """delete from payee where mngcode = '{}'""".format(mngno)
+        sql1 = """delete from payee where gcode = '{}'""".format(gcode)
         sql2 = """insert into payee ({}) values {}""".format(tstring,tuple(datas))
         conn = connectDb.connect_Db()
         curs = conn.cursor()
@@ -1049,10 +1087,18 @@ class crew_Mastermng(QDialog):
     
     def change_workingday(self):
         today = datetime.today()
-        tdate = self.inprocess.date()
-        tdate = tdate.toPyDate()
-        working_day = str(today.date() - tdate)
-        self.service_period.setText(working_day)
+        working = self.service.currentText()
+        if working == 'Y':
+            tdate = self.inprocess.date()
+            tdate = tdate.toPyDate()
+            working_day = str(today.date() - tdate)
+            self.service_period.setText(working_day)
+        else:
+            tdate = self.outprocess.date()
+            if tdate != '':
+                tdate = tdate.toPyDate()
+                working_day = str(today.date() - tdate)
+                self.service_period.setText(working_day)
 
 
     def change_branch(self):
@@ -1174,7 +1220,7 @@ class spend_Cust(QDialog):
 
     def sqls(self, add_sql,permission):
         tstring = self.tstring
-        if permission != 'admin' and permission != 'manager':
+        if permission != 'admin' and permission != 'manager' and permission != 'crew':
             sql = """select {} from payee where branch_code = '{}'""".format(tstring,permission)
         else:
             sql = """select {} from payee""".format(tstring)
@@ -1425,7 +1471,7 @@ class spend_Cust(QDialog):
             self.account_name.setText(self.acc_name)
             self.account_bank.setText(self.acc_bank)
             self.account_code.setText(self.acc_code)
-            self.payment_order_code.setText(self.pay_order_code)
+            self.payment_order_code.setCurrentText(self.pay_order_code)
             self.payment_order_name.setCurrentText(self.pay_order_name)
             self.payment_code.setText(self.pay_code)
             self.payment_name.setCurrentText(self.pay_name)
@@ -1716,12 +1762,6 @@ class get_Cust_only(QDialog):
     def quit(self):
         self.pcode = False
         self.close()
-
-def suppress_qt_warnings():
-	environ["QT_DEVICE_PIXEL_RATIO"] = "1"
-	environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"
-	environ["QT_SCREEN_SCALE_FACTORS"] = "0"
-	environ["QT_SCALE_FACTOR"] = "0"
 
 
 if __name__ == "__main__":
