@@ -55,6 +55,7 @@ class MyWindow(QMainWindow, form_class):
         self.settlement_action.triggered.connect(self.go_settlement)
         self.actionUpdate.triggered.connect(self.go_update)
         self.tot_profit_loss.triggered.connect(self.go_totofprofitloss)
+        self.config.triggered.connect(self.go_mailconf)
 
         dm = recv_mail_daemon.Checking_receivedMails()
         dm.daemon = True
@@ -135,10 +136,10 @@ class MyWindow(QMainWindow, form_class):
         goup = update_version.update_Version()
         version = goup.get_version()
         self.setWindowTitle('BSM : ' + version)
-        if cond == 0:
-            goup.move_updatefile(path, sys_name, executer)
+        if cond == 0: #자동 업데이트 일때
             update = goup.check_update(sys_name)
             if update:
+                goup.move_updatefile(path, sys_name, executer)
                 goup.go_update(cond)
         else:
             goup.move_updatefile(path, sys_name, executer)
@@ -150,6 +151,13 @@ class MyWindow(QMainWindow, form_class):
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
                 if r == QMessageBox.Yes:
                     goup.go_update(cond)
+
+    def go_mailconf(self):
+        permission = self.permission
+        if permission == 'admin':
+            pop = mail_Conf(self)
+            pop.begin(permission)
+            pop.exec_()
 
 
 
@@ -1006,8 +1014,12 @@ class crew_Mastermng(QDialog):
 
 ##### 지급처 MAster 자동 생성
     def make_payee(self,datas):
+
+
         #self.paycust_cols = ['gcode', 'gname', 'account_no', 'account_bank', 'branch_code', 'branch_name',
                              # 'account_code','account_name','payment_order_code', 'payment_order_name','payment_name','confirm','remark','pay','mngcode','payment_code','bank_code']
+
+
         mngcode = self.payee_get_mngno()
         gcode = 'H' + str(datas[14])
         gname = datas[1]
@@ -1065,8 +1077,6 @@ class crew_Mastermng(QDialog):
         curs.execute(sql2)
         conn.commit()
         conn.close()
-
-
 
 
 
@@ -1206,6 +1216,7 @@ class spend_Cust(QDialog):
         self.seq = ''
 
 
+
     def begin(self,permission):
         self.permission = permission
         if permission  == 'admin':
@@ -1217,6 +1228,7 @@ class spend_Cust(QDialog):
         self.sqls(add_sql,permission)
         self.display_grid()
         self.display_items(0)
+
 
     def sqls(self, add_sql,permission):
         tstring = self.tstring
@@ -1238,6 +1250,7 @@ class spend_Cust(QDialog):
         if res:
             tbl = self.tableWidget
             display_tableWidget.display(tbl,res,'sql')
+
 
     def display_items(self,row):
         if self.res:
@@ -1273,6 +1286,7 @@ class spend_Cust(QDialog):
         self.display_grid()
         self.display_items(0)
 
+
     def go_findcust(self):
         pop = get_Cust(self)
         pop.begin(self.permission)
@@ -1290,6 +1304,14 @@ class spend_Cust(QDialog):
         pop.exec_()
         self.account_code.setText(pop.code)
         self.account_name.setText(pop.name)
+
+
+    def get_bank(self):
+        pop = spend_cond_Mng(self)
+        pop.begin(self.permission,"payee")
+        pop.exec_()
+        self.account_bank.setText(pop.bankname)
+        self.bank_code.setText(pop.bankcode)
 
 
     def add_save(self):
@@ -1718,6 +1740,10 @@ class get_Cust_only(QDialog):
                     getattr(self,cols[i]).setEnabled(True)
                     if cols[i] == 'payment_order_name' or cols[i] == 'payment_name':
                         getattr(self,cols[i]).setCurrentIndex(0)
+                    elif cols[i] == 'pcode':
+                        new_code = self.get_cust_code()
+                        self.pcode.setText(new_code)
+                        self.pcode.setEnabled(False)
                     else:
                         getattr(self,cols[i]).setText('')
                     self.edit = True
@@ -1734,6 +1760,17 @@ class get_Cust_only(QDialog):
         curs.execute(sql2)
         conn.commit()
         conn.close()
+
+
+
+    def get_cust_code(self):
+        sql = """select max(pcode) from payee_cust where pcode like '1%%'"""
+        res = var_func.execute_sql(sql)
+        maxval = int(res[0][0])
+        newcode = maxval + 1
+        return str(newcode)
+
+
 
     def execute_sql(self, sql):
         conn = connectDb.connect_Db()
@@ -1761,6 +1798,42 @@ class get_Cust_only(QDialog):
 
     def quit(self):
         self.pcode = False
+        self.close()
+
+
+
+class mail_Conf(QDialog):
+    def __init__(self, parent):
+        super(mail_Conf, self).__init__(parent)
+        uic.loadUi("mail_conf.ui", self)
+        self.show()
+
+
+    def begin(self,permission):
+        if permission != 'admin':
+            return
+        sql = """select ceo_mail,financial_mail,financial_cc_mail from mail_conf"""
+        res = var_func.execute_sql(sql)
+        self.lineEdit.setText(res[0][0])
+        self.lineEdit_2.setText(res[0][1])
+        self.lineEdit_3.setText(res[0][2])
+
+
+    def save(self):
+        ceo_mail = self.lineEdit.text()
+        financial_mail = self.lineEdit_2.text()
+        financial_cc_mail = self.lineEdit_3.text()
+        sql = """update mail_conf set ceo_mail = '{}', financial_mail = '{}', financial_cc_mail = '{}' where seq = 1""".format(ceo_mail,financial_mail,financial_cc_mail)
+        try:
+            var_func.execute_sql_insdelupd(sql)
+            QMessageBox.about(self,"Save Complete","저장됬다.")
+            self.close()
+        except:
+            QMessageBox.about(self, "Save Fail", "저장안됬다.")
+
+
+
+    def quit(self):
         self.close()
 
 
