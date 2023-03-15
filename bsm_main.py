@@ -57,15 +57,19 @@ class MyWindow(QMainWindow, form_class):
         self.tot_profit_loss.triggered.connect(self.go_totofprofitloss)
         self.config.triggered.connect(self.go_mailconf)
 
-        dm = recv_mail_daemon.Checking_receivedMails()
-        dm.daemon = True
-        dm.start()
+
+        #메일 자동 수신 데몬 실행중지 -- 전결권한수정에 따름 (대표님메일 수신 기능 필요 없어졌음) --> 2023.03.08
+        #dm = recv_mail_daemon.Checking_receivedMails()
+        #dm.daemon = True
+        #dm.start()
+
 
     def go_login(self):
         pop = login(self)
         pop.log_in()
         pop.exec_()
         self.permission = pop.permission
+
 
     def go_branch_code(self):
         permission = self.permission
